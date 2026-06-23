@@ -1,0 +1,31 @@
+name: tecsup_community
+description: "A new Flutter project for Tecsup Community."
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.11.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Iconos estilizados para una interfaz moderna
+  cupertino_icons: ^1.0.8
+
+  # --- Dependencias para el Core de la aplicación (Fases 1 y 2) ---
+  supabase_flutter: ^2.8.0
+  image_picker: ^1.1.2
+  geolocator: ^14.0.3
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+
+  # Configuración correcta de la carpeta de recursos para evitar errores 404 en Web
+  assets:
+    - assets/
