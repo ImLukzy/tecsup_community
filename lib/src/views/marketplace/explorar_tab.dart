@@ -64,6 +64,7 @@ class _ExplorarTabState extends State<ExplorarTab> {
 
     try {
       final existente = await widget.supabase.from('favoritos').select().eq('usuario_id', miUid).eq('producto_id', productoId).maybeSingle();
+      // 🟩 Corregido aquí: cambiado 'existing' por 'existente'
       if (existente == null) {
         await widget.supabase.from('favoritos').insert({'usuario_id': miUid, 'producto_id': productoId});
       } else {
@@ -76,18 +77,15 @@ class _ExplorarTabState extends State<ExplorarTab> {
 
   Future<void> _eliminarProducto(dynamic id) async {
     try {
-      // Nos aseguramos de castear el id correctamente por si viaja como texto o int
       final productoId = id is String ? int.tryParse(id) ?? id : id;
 
-      // Eliminamos el registro de la tabla correcta 'productos'
       await widget.supabase
-          .from('productos')
+          .from('marketplace')
           .delete()
           .eq('id', productoId);
 
       if (!mounted) return;
       
-      // Cerramos el modal inferior de detalles
       Navigator.pop(context);
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -144,10 +142,14 @@ class _ExplorarTabState extends State<ExplorarTab> {
     if (miUid == null || vendedorId == null) return;
 
     try {
+      final dynamic productoIdCorrecto = prod['id'] is String 
+          ? int.tryParse(prod['id']) ?? prod['id'] 
+          : prod['id'];
+
       final habitacionExistente = await widget.supabase
           .from('chats')
           .select()
-          .eq('producto_id', prod['id'])
+          .eq('producto_id', productoIdCorrecto)
           .eq('comprador_id', miUid)
           .maybeSingle();
 
@@ -157,13 +159,14 @@ class _ExplorarTabState extends State<ExplorarTab> {
         chatReal = habitacionExistente;
       } else {
         chatReal = await widget.supabase.from('chats').insert({
-          'producto_id': prod['id'],
+          'producto_id': productoIdCorrecto,
           'comprador_id': miUid,
           'vendedor_id': vendedorId,
         }).select().single();
       }
 
       if (!mounted) return;
+
       Navigator.push(
         context,
         MaterialPageRoute(
@@ -174,7 +177,15 @@ class _ExplorarTabState extends State<ExplorarTab> {
         ),
       );
     } catch (e) {
-      print("Error al abrir chat: $e");
+      print("Error detallado al abrir/crear chat: $e");
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('❌ Error al conectar con el vendedor: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
     }
   }
 
@@ -210,7 +221,7 @@ class _ExplorarTabState extends State<ExplorarTab> {
           ),
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: widget.supabase.from('productos').stream(primaryKey: ['id']).order('created_at', ascending: false),
+              stream: widget.supabase.from('marketplace').stream(primaryKey: ['id']).order('created_at', ascending: false),
               builder: (context, snapshot) {
                 if (snapshot.connectionState == ConnectionState.waiting) {
                   return const Center(child: CircularProgressIndicator(color: Color(0xFF3F69FF)));

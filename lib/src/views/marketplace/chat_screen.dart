@@ -4,7 +4,6 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
 
 class ChatScreen extends StatefulWidget {
-  // Cambiado a dynamic para aceptar tanto IDs numéricos (int) como UUIDs (String)
   final dynamic chatId; 
   final String productoTitulo;
 
@@ -36,7 +35,6 @@ class _ChatScreenState extends State<ChatScreen> {
   }
 
   void _cargarDatosChat() {
-    // Escuchamos los cambios del chat forzando el ID a su valor real
     _chatStreamSubscription = _supabase
         .from('chats')
         .stream(primaryKey: ['id'])
@@ -49,7 +47,6 @@ class _ChatScreenState extends State<ChatScreen> {
           final esVendedor = chat['vendedor_id'] == myUid;
           final contraparteId = esVendedor ? chat['comprador_id'] : chat['vendedor_id'];
 
-          // Evitamos fallos buscando el perfil de la contraparte de forma segura
           String nombreTemp = "Compañero Tecsup";
           if (contraparteId != null) {
             try {
@@ -152,11 +149,15 @@ class _ChatScreenState extends State<ChatScreen> {
     if (myUid == null) return;
 
     _msgController.clear();
-    await _supabase.from('mensajes').insert({
-      'chat_id': widget.chatId,
-      'remitente_id': myUid,
-      'contenido': texto,
-    });
+    try {
+      await _supabase.from('mensajes').insert({
+        'chat_id': widget.chatId,
+        'remitente_id': myUid,
+        'contenido': texto,
+      });
+    } catch (e) {
+      print("Error al enviar mensaje: $e");
+    }
   }
 
   @override
@@ -216,12 +217,16 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
+              // 🔄 CORREGIDO: El ordenamiento nativo dentro del stream evita trabar Flutter Web
               stream: _supabase
                   .from('mensajes')
                   .stream(primaryKey: ['id'])
-                  .eq('chat_id', widget.chatId)
+                  .eq('chat_id', widget.chatId.toString())
                   .order('created_at', ascending: true),
               builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
+                }
                 if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF3F69FF)));
                 final mensajes = snapshot.data!;
                 return ListView.builder(

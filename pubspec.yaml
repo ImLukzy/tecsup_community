@@ -26,6 +26,6 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # Configuración correcta de la carpeta de recursos para evitar errores 404 en Web
+  # 🟩 Carpeta de recursos corregida sin duplicados
   assets:
     - assets/
