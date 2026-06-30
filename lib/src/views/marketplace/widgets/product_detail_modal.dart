@@ -2,29 +2,29 @@ import 'dart:io';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 
-
 class ProductDetailModal extends StatelessWidget {
   final Map<String, dynamic> prod;
   final bool esMio;
+  final bool esAdmin;
   final bool tieneLike;
   final VoidCallback onLikePressed;
   final VoidCallback onActionPressed;
-
+  final VoidCallback? onAdminDeletePressed;
 
   const ProductDetailModal({
     Key? key,
     required this.prod,
     required this.esMio,
+    this.esAdmin = false,
     required this.tieneLike,
     required this.onLikePressed,
     required this.onActionPressed,
+    this.onAdminDeletePressed,
   }) : super(key: key);
-
 
   @override
   Widget build(BuildContext context) {
     final String imageUrl = prod['image_url'] ?? '';
-
 
     return SafeArea(
       child: Padding(
@@ -55,10 +55,34 @@ class ProductDetailModal extends StatelessWidget {
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(12),
                 child: imageUrl.startsWith('http')
-                    ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.grey, size: 50))
+                    ? Image.network(
+                        imageUrl,
+                        fit: BoxFit.cover,
+                        errorBuilder: (_, __, ___) => const Icon(
+                          Icons.broken_image,
+                          color: Colors.grey,
+                          size: 50,
+                        ),
+                      )
                     : (kIsWeb
-                        ? Image.network(imageUrl, fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.grey, size: 50))
-                        : Image.file(File(imageUrl), fit: BoxFit.cover, errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, color: Colors.grey, size: 50))),
+                          ? Image.network(
+                              imageUrl,
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.broken_image,
+                                color: Colors.grey,
+                                size: 50,
+                              ),
+                            )
+                          : Image.file(
+                              File(imageUrl),
+                              fit: BoxFit.cover,
+                              errorBuilder: (_, __, ___) => const Icon(
+                                Icons.broken_image,
+                                color: Colors.grey,
+                                size: 50,
+                              ),
+                            )),
               ),
             ),
             const SizedBox(height: 16),
@@ -68,7 +92,11 @@ class ProductDetailModal extends StatelessWidget {
                 Expanded(
                   child: Text(
                     prod['titulo'] ?? 'Sin título',
-                    style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 IconButton(
@@ -82,7 +110,11 @@ class ProductDetailModal extends StatelessWidget {
             ),
             Text(
               "S/. ${prod['precio'] ?? '0.00'}",
-              style: const TextStyle(color: Color(0xFF3F69FF), fontSize: 18, fontWeight: FontWeight.bold),
+              style: const TextStyle(
+                color: Color(0xFF3F69FF),
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
             ),
             const SizedBox(height: 12),
             Text(
@@ -90,17 +122,51 @@ class ProductDetailModal extends StatelessWidget {
               style: const TextStyle(color: Colors.grey, fontSize: 14),
             ),
             const SizedBox(height: 24),
+            if (esAdmin && !esMio && onAdminDeletePressed != null) ...[
+              ElevatedButton.icon(
+                onPressed: onAdminDeletePressed,
+                icon: const Icon(
+                  Icons.admin_panel_settings_rounded,
+                  color: Colors.white,
+                ),
+                label: const Text(
+                  "Eliminar Publicacion (Moderacion)",
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontSize: 15,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.deepOrange,
+                  minimumSize: const Size(double.infinity, 48),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  elevation: 0,
+                ),
+              ),
+              const SizedBox(height: 10),
+            ],
             ElevatedButton(
               onPressed: onActionPressed,
               style: ElevatedButton.styleFrom(
-                backgroundColor: esMio ? Colors.redAccent : const Color(0xFF3F69FF),
+                backgroundColor: esMio
+                    ? Colors.redAccent
+                    : const Color(0xFF3F69FF),
                 minimumSize: const Size(double.infinity, 48),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
                 elevation: 0,
               ),
               child: Text(
                 esMio ? "Eliminar Publicación" : "Contactar Vendedor",
-                style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ],

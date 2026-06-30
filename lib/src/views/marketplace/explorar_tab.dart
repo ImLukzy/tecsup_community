@@ -1,7 +1,6 @@
-import 'dart:io';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tecsup_community/src/services/local_notification_service.dart';
 import 'package:tecsup_community/src/views/marketplace/chat_screen.dart';
 import 'package:tecsup_community/src/views/marketplace/widgets/product_card.dart';
 import 'package:tecsup_community/src/views/marketplace/widgets/product_detail_modal.dart';
@@ -20,6 +19,11 @@ class _ExplorarTabState extends State<ExplorarTab> {
   final Set<dynamic> _favoritosLocales = {};
   bool _cargando = false;
   List<Map<String, dynamic>> _productos = [];
+
+  bool get _esAdmin {
+    final email = widget.supabase.auth.currentUser?.email?.toLowerCase();
+    return email == 'lukas.melgar@tecsup.edu.pe';
+  }
 
   @override
   void initState() {
@@ -47,7 +51,7 @@ class _ExplorarTabState extends State<ExplorarTab> {
           .from('marketplace')
           .select()
           .order('created_at', ascending: false);
-      
+
       _productos = List<Map<String, dynamic>>.from(data);
     } catch (e) {
       print("Error cargando productos en catálogo: $e");
@@ -62,7 +66,7 @@ class _ExplorarTabState extends State<ExplorarTab> {
           .from('favoritos')
           .select('producto_id')
           .eq('usuario_id', miUid);
-          
+
       _favoritosLocales.clear();
       for (var item in res) {
         _favoritosLocales.add(item['producto_id']);
@@ -75,14 +79,18 @@ class _ExplorarTabState extends State<ExplorarTab> {
   Future<void> _manejarLike(dynamic productoId, StateSetter? modalState) async {
     final miUid = widget.supabase.auth.currentUser?.id;
     if (miUid == null) return;
+    final producto = _productos.firstWhere(
+      (item) => item['id'] == productoId,
+      orElse: () => <String, dynamic>{},
+    );
 
-    final cambiarEstado = () {
+    void cambiarEstado() {
       if (_favoritosLocales.contains(productoId)) {
         _favoritosLocales.remove(productoId);
       } else {
         _favoritosLocales.add(productoId);
       }
-    };
+    }
 
     setState(cambiarEstado);
     if (modalState != null) modalState(cambiarEstado);
@@ -94,12 +102,17 @@ class _ExplorarTabState extends State<ExplorarTab> {
           .eq('usuario_id', miUid)
           .eq('producto_id', productoId)
           .maybeSingle();
-          
+
       if (existente == null) {
         await widget.supabase.from('favoritos').insert({
-          'usuario_id': miUid, 
-          'producto_id': productoId
+          'usuario_id': miUid,
+          'producto_id': productoId,
         });
+        await LocalNotificationService.show(
+          title: 'Producto guardado',
+          body:
+              '${producto['titulo'] ?? 'El producto'} se agrego a tus favoritos.',
+        );
       } else {
         await widget.supabase
             .from('favoritos')
@@ -117,10 +130,7 @@ class _ExplorarTabState extends State<ExplorarTab> {
       final productoId = id is String ? int.tryParse(id) ?? id : id;
 
       // 🟩 UNIFICADO: Borrado de la tabla 'marketplace'
-      await widget.supabase
-          .from('marketplace')
-          .delete()
-          .eq('id', productoId);
+      await widget.supabase.from('marketplace').delete().eq('id', productoId);
 
       await _cargarProductosDesdeBD();
 
@@ -151,18 +161,20 @@ class _ExplorarTabState extends State<ExplorarTab> {
     final miUid = widget.supabase.auth.currentUser?.id;
     final vendedorId = prod['usuario_id'];
     final esMio = vendedorId == miUid;
+    final esAdmin = _esAdmin;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF21242D),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20))
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (context) => StatefulBuilder(
         builder: (context, setBottomSheetState) => ProductDetailModal(
           prod: prod,
           esMio: esMio,
+          esAdmin: esAdmin,
           tieneLike: _favoritosLocales.contains(prod['id']),
           onLikePressed: () => _manejarLike(prod['id'], setBottomSheetState),
           onActionPressed: () {
@@ -173,6 +185,9 @@ class _ExplorarTabState extends State<ExplorarTab> {
               _iniciarOAbrirChat(prod);
             }
           },
+          onAdminDeletePressed: esAdmin
+              ? () => _eliminarProducto(prod['id'])
+              : null,
         ),
       ),
     );
@@ -184,8 +199,8 @@ class _ExplorarTabState extends State<ExplorarTab> {
     if (miUid == null || vendedorId == null) return;
 
     try {
-      final dynamic productoIdCorrecto = prod['id'] is String 
-          ? int.tryParse(prod['id']) ?? prod['id'] 
+      final dynamic productoIdCorrecto = prod['id'] is String
+          ? int.tryParse(prod['id']) ?? prod['id']
           : prod['id'];
 
       final habitacionExistente = await widget.supabase
@@ -200,11 +215,15 @@ class _ExplorarTabState extends State<ExplorarTab> {
       if (habitacionExistente != null) {
         chatReal = habitacionExistente;
       } else {
-        chatReal = await widget.supabase.from('chats').insert({
-          'producto_id': productoIdCorrecto,
-          'comprador_id': miUid,
-          'vendedor_id': vendedorId,
-        }).select().single();
+        chatReal = await widget.supabase
+            .from('chats')
+            .insert({
+              'producto_id': productoIdCorrecto,
+              'comprador_id': miUid,
+              'vendedor_id': vendedorId,
+            })
+            .select()
+            .single();
       }
 
       if (!mounted) return;
@@ -239,10 +258,11 @@ class _ExplorarTabState extends State<ExplorarTab> {
     List<Map<String, dynamic>> productosFiltrados = _productos;
     if (_filtroBusqueda.isNotEmpty) {
       productosFiltrados = productosFiltrados
-          .where((p) => (p['titulo'] ?? '')
-              .toString()
-              .toLowerCase()
-              .contains(_filtroBusqueda))
+          .where(
+            (p) => (p['titulo'] ?? '').toString().toLowerCase().contains(
+              _filtroBusqueda,
+            ),
+          )
           .toList();
     }
 
@@ -270,42 +290,47 @@ class _ExplorarTabState extends State<ExplorarTab> {
                     border: InputBorder.none,
                     contentPadding: EdgeInsets.symmetric(vertical: 14),
                   ),
-                  onChanged: (val) => setState(() => _filtroBusqueda = val.toLowerCase()),
+                  onChanged: (val) =>
+                      setState(() => _filtroBusqueda = val.toLowerCase()),
                 ),
               ),
             ),
             Expanded(
               child: _cargando
-                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF3F69FF)))
+                  ? const Center(
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF3F69FF),
+                      ),
+                    )
                   : productosFiltrados.isEmpty
-                      ? ListView(
-                          children: const [
-                            SizedBox(height: 100),
-                            Center(
-                              child: Text(
-                                'No se encontraron artículos.', 
-                                style: TextStyle(color: Colors.grey)
-                              ),
-                            ),
-                          ],
-                        )
-                      : GridView.builder(
-                          padding: const EdgeInsets.all(14),
-                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: columnas,
-                            crossAxisSpacing: 14,
-                            mainAxisSpacing: 14,
-                            childAspectRatio: 0.74,
+                  ? ListView(
+                      children: const [
+                        SizedBox(height: 100),
+                        Center(
+                          child: Text(
+                            'No se encontraron artículos.',
+                            style: TextStyle(color: Colors.grey),
                           ),
-                          itemCount: productosFiltrados.length,
-                          itemBuilder: (context, index) {
-                            final prod = productosFiltrados[index];
-                            return ProductCard(
-                              prod: prod,
-                              onTap: () => _mostrarDetalles(prod),
-                            );
-                          },
                         ),
+                      ],
+                    )
+                  : GridView.builder(
+                      padding: const EdgeInsets.all(14),
+                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: columnas,
+                        crossAxisSpacing: 14,
+                        mainAxisSpacing: 14,
+                        childAspectRatio: 0.74,
+                      ),
+                      itemCount: productosFiltrados.length,
+                      itemBuilder: (context, index) {
+                        final prod = productosFiltrados[index];
+                        return ProductCard(
+                          prod: prod,
+                          onTap: () => _mostrarDetalles(prod),
+                        );
+                      },
+                    ),
             ),
           ],
         ),

@@ -2,11 +2,13 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:tecsup_community/src/services/local_notification_service.dart';
 
 class UploadProductModal extends StatefulWidget {
   final Function(Map<String, dynamic>) onUpload;
 
-  const UploadProductModal({Key? key, required this.onUpload}) : super(key: key);
+  const UploadProductModal({Key? key, required this.onUpload})
+    : super(key: key);
 
   @override
   State<UploadProductModal> createState() => _UploadProductModalState();
@@ -63,16 +65,28 @@ class _UploadProductModalState extends State<UploadProductModal> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ListTile(
-                  leading: const Icon(Icons.photo_camera_rounded, color: Color(0xFF3F69FF)),
-                  title: const Text('Tomar foto', style: TextStyle(color: Colors.white)),
+                  leading: const Icon(
+                    Icons.photo_camera_rounded,
+                    color: Color(0xFF3F69FF),
+                  ),
+                  title: const Text(
+                    'Tomar foto',
+                    style: TextStyle(color: Colors.white),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _seleccionarImagen(ImageSource.camera);
                   },
                 ),
                 ListTile(
-                  leading: const Icon(Icons.photo_library_rounded, color: Color(0xFF3F69FF)),
-                  title: const Text('Elegir de galeria', style: TextStyle(color: Colors.white)),
+                  leading: const Icon(
+                    Icons.photo_library_rounded,
+                    color: Color(0xFF3F69FF),
+                  ),
+                  title: const Text(
+                    'Elegir de galeria',
+                    style: TextStyle(color: Colors.white),
+                  ),
                   onTap: () {
                     Navigator.pop(context);
                     _seleccionarImagen(ImageSource.gallery);
@@ -88,7 +102,7 @@ class _UploadProductModalState extends State<UploadProductModal> {
 
   Future<void> _guardarProducto() async {
     final user = _supabase.auth.currentUser;
-    
+
     if (user == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('⚠️ Debes iniciar sesión para publicar.')),
@@ -96,9 +110,12 @@ class _UploadProductModalState extends State<UploadProductModal> {
       return;
     }
 
-    if (_tituloController.text.trim().isEmpty || _precioController.text.trim().isEmpty) {
+    if (_tituloController.text.trim().isEmpty ||
+        _precioController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('⚠️ El título y el precio son obligatorios.')),
+        const SnackBar(
+          content: Text('⚠️ El título y el precio son obligatorios.'),
+        ),
       );
       return;
     }
@@ -111,14 +128,20 @@ class _UploadProductModalState extends State<UploadProductModal> {
       // 1. Subir imagen a Supabase Storage si seleccionó una
       if (_webImageBytes != null) {
         final String fileExt = 'jpg';
-        final String fileName = '${DateTime.now().millisecondsSinceEpoch}_product.$fileExt';
+        final String fileName =
+            '${DateTime.now().millisecondsSinceEpoch}_product.$fileExt';
 
         // Asegúrate de tener creado un bucket público llamado 'productos' en Supabase Storage
-        await _supabase.storage.from('productos').uploadBinary(
-          fileName,
-          _webImageBytes!,
-          fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: true),
-        );
+        await _supabase.storage
+            .from('productos')
+            .uploadBinary(
+              fileName,
+              _webImageBytes!,
+              fileOptions: const FileOptions(
+                contentType: 'image/jpeg',
+                upsert: true,
+              ),
+            );
 
         imageUrl = _supabase.storage.from('productos').getPublicUrl(fileName);
       }
@@ -135,8 +158,18 @@ class _UploadProductModalState extends State<UploadProductModal> {
         'longitud': -71.51,
       };
 
-      final data = await _supabase.from('marketplace').insert(nuevoProducto).select().single();
+      final data = await _supabase
+          .from('marketplace')
+          .insert(nuevoProducto)
+          .select()
+          .single();
 
+      if (!mounted) return;
+      await LocalNotificationService.show(
+        title: 'Producto publicado',
+        body:
+            '${data['titulo'] ?? 'Tu producto'} ya esta visible en Tecsup Community.',
+      );
       if (!mounted) return;
       widget.onUpload(data); // Ejecuta el callback para actualizar la lista
       Navigator.pop(context); // Cierra el modal
@@ -159,7 +192,9 @@ class _UploadProductModalState extends State<UploadProductModal> {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
       child: Container(
         decoration: const BoxDecoration(
           color: Color(0xFF21242D),
@@ -173,10 +208,14 @@ class _UploadProductModalState extends State<UploadProductModal> {
             children: [
               const Text(
                 'Nuevo Producto',
-                style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                style: TextStyle(
+                  color: Colors.white,
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 16),
-              
+
               // Selector de Imagen
               GestureDetector(
                 onTap: _mostrarOpcionesImagen,
@@ -186,19 +225,34 @@ class _UploadProductModalState extends State<UploadProductModal> {
                   decoration: BoxDecoration(
                     color: const Color(0xFF181A20),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
+                    border: Border.all(
+                      color: Colors.grey.withValues(alpha: 0.3),
+                    ),
                   ),
                   child: _webImageBytes != null
                       ? ClipRRect(
                           borderRadius: BorderRadius.circular(12),
-                          child: Image.memory(_webImageBytes!, fit: BoxFit.cover),
+                          child: Image.memory(
+                            _webImageBytes!,
+                            fit: BoxFit.cover,
+                          ),
                         )
                       : const Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.add_photo_alternate_outlined, color: Colors.grey, size: 40),
+                            Icon(
+                              Icons.add_photo_alternate_outlined,
+                              color: Colors.grey,
+                              size: 40,
+                            ),
                             SizedBox(height: 8),
-                            Text('Añadir Foto del Artículo', style: TextStyle(color: Colors.grey, fontSize: 13)),
+                            Text(
+                              'Añadir Foto del Artículo',
+                              style: TextStyle(
+                                color: Colors.grey,
+                                fontSize: 13,
+                              ),
+                            ),
                           ],
                         ),
                 ),
@@ -214,7 +268,10 @@ class _UploadProductModalState extends State<UploadProductModal> {
                   labelStyle: const TextStyle(color: Colors.grey),
                   filled: true,
                   fillColor: const Color(0xFF181A20),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -229,7 +286,10 @@ class _UploadProductModalState extends State<UploadProductModal> {
                   labelStyle: const TextStyle(color: Colors.grey),
                   filled: true,
                   fillColor: const Color(0xFF181A20),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
               const SizedBox(height: 12),
@@ -244,7 +304,10 @@ class _UploadProductModalState extends State<UploadProductModal> {
                   labelStyle: const TextStyle(color: Colors.grey),
                   filled: true,
                   fillColor: const Color(0xFF181A20),
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: BorderSide.none),
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(8),
+                    borderSide: BorderSide.none,
+                  ),
                 ),
               ),
               const SizedBox(height: 20),
@@ -256,12 +319,27 @@ class _UploadProductModalState extends State<UploadProductModal> {
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFF3F69FF),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   onPressed: _isSaving ? null : _guardarProducto,
                   child: _isSaving
-                      ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                      : const Text('Publicar Producto', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'Publicar Producto',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
               ),
             ],
