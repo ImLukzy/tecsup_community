@@ -1,13 +1,14 @@
 import 'dart:async';
+
 import 'package:flutter/material.dart';
-import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 class ChatScreen extends StatefulWidget {
-  final dynamic chatId; 
+  final dynamic chatId;
   final String productoTitulo;
 
-  const ChatScreen({Key? key, required this.chatId, required this.productoTitulo}) : super(key: key);
+  const ChatScreen({super.key, required this.chatId, required this.productoTitulo});
 
   @override
   State<ChatScreen> createState() => _ChatScreenState();
@@ -19,7 +20,7 @@ class _ChatScreenState extends State<ChatScreen> {
   StreamSubscription<List<Map<String, dynamic>>>? _chatStreamSubscription;
   bool _compartiendoUbicacion = false;
   Map<String, dynamic>? _chatData;
-  String _nombreContraparte = "Usuario";
+  String _nombreContraparte = 'Usuario';
 
   @override
   void initState() {
@@ -40,42 +41,76 @@ class _ChatScreenState extends State<ChatScreen> {
         .stream(primaryKey: ['id'])
         .eq('id', widget.chatId)
         .listen((data) async {
-          if (data.isEmpty || !mounted) return;
-          
-          final chat = data.first;
-          final myUid = _supabase.auth.currentUser?.id;
-          final esVendedor = chat['vendedor_id'] == myUid;
-          final contraparteId = esVendedor ? chat['comprador_id'] : chat['vendedor_id'];
+      if (data.isEmpty || !mounted) return;
 
-          String nombreTemp = "Compañero Tecsup";
-          if (contraparteId != null) {
-            try {
-              final perfil = await _supabase
-                  .from('perfiles')
-                  .select('nombre_completo')
-                  .eq('id', contraparteId)
-                  .maybeSingle();
-              if (perfil != null && perfil['nombre_completo'] != null) {
-                nombreTemp = perfil['nombre_completo'];
-              }
-            } catch (_) {}
-          }
+      final chat = data.first;
+      final myUid = _supabase.auth.currentUser?.id;
+      final esVendedor = chat['vendedor_id'] == myUid;
+      final contraparteId = esVendedor ? chat['comprador_id'] : chat['vendedor_id'];
 
-          if (mounted) {
-            setState(() {
-              _chatData = chat;
-              _nombreContraparte = nombreTemp;
-              _compartiendoUbicacion = esVendedor 
-                  ? (chat['vendedor_compartiendo'] ?? false) 
-                  : (chat['comprador_compartiendo'] ?? false);
-            });
+      String nombreTemp = 'Companero Tecsup';
+      if (contraparteId != null) {
+        try {
+          final perfil = await _supabase
+              .from('perfiles')
+              .select('nombre_completo')
+              .eq('id', contraparteId)
+              .maybeSingle();
+          if (perfil != null && perfil['nombre_completo'] != null) {
+            nombreTemp = perfil['nombre_completo'];
           }
+        } catch (_) {}
+      }
+
+      if (mounted) {
+        setState(() {
+          _chatData = chat;
+          _nombreContraparte = nombreTemp;
+          _compartiendoUbicacion = esVendedor
+              ? (chat['vendedor_compartiendo'] ?? false)
+              : (chat['comprador_compartiendo'] ?? false);
         });
+      }
+    });
+  }
+
+  String _estadoConfirmacionSolicitadaPor(bool esVendedor) {
+    return esVendedor ? 'confirmacion_vendedor' : 'confirmacion_comprador';
+  }
+
+  bool _confirmacionSolicitadaPorMi(String? estado, bool esVendedor) {
+    return estado == _estadoConfirmacionSolicitadaPor(esVendedor);
+  }
+
+  bool _puedoConfirmarVenta(String? estado, bool esVendedor) {
+    return (estado == 'confirmacion_vendedor' && !esVendedor) ||
+        (estado == 'confirmacion_comprador' && esVendedor);
+  }
+
+  bool _ventaPendiente(String? estado) {
+    return estado == 'confirmacion_vendedor' || estado == 'confirmacion_comprador';
+  }
+
+  Future<void> _insertarMensajeSistema(String contenido) async {
+    final myUid = _supabase.auth.currentUser?.id;
+    if (myUid == null) return;
+
+    await _supabase.from('mensajes').insert({
+      'chat_id': widget.chatId,
+      'remitente_id': myUid,
+      'contenido': contenido,
+    });
   }
 
   Future<void> _conmutarUbicacion(bool valor) async {
     final myUid = _supabase.auth.currentUser?.id;
     if (myUid == null || _chatData == null) return;
+    if (_chatData!['estado'] != 'concretado') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Primero ambos deben confirmar la venta.')),
+      );
+      return;
+    }
 
     final esVendedor = _chatData!['vendedor_id'] == myUid;
     final campoCompartir = esVendedor ? 'vendedor_compartiendo' : 'comprador_compartiendo';
@@ -83,23 +118,45 @@ class _ChatScreenState extends State<ChatScreen> {
     final lngCampo = esVendedor ? 'vendedor_lng' : 'comprador_lng';
 
     if (valor) {
-      LocationPermission permission = await Geolocator.checkPermission();
+      final servicioActivo = await Geolocator.isLocationServiceEnabled();
+      if (!servicioActivo) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Activa el GPS del celular para compartir tu ubicacion.')),
+        );
+        return;
+      }
+
+      var permission = await Geolocator.checkPermission();
       if (permission == LocationPermission.denied) {
         permission = await Geolocator.requestPermission();
-        if (permission == LocationPermission.denied) return;
+      }
+
+      if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Permiso de ubicacion denegado.')),
+        );
+        return;
       }
 
       setState(() => _compartiendoUbicacion = true);
 
       try {
-        Position pos = await Geolocator.getCurrentPosition();
+        final pos = await Geolocator.getCurrentPosition(
+          locationSettings: const LocationSettings(accuracy: LocationAccuracy.high),
+        );
         await _supabase.from('chats').update({
           campoCompartir: true,
           latCampo: pos.latitude,
           lngCampo: pos.longitude,
         }).eq('id', widget.chatId);
       } catch (e) {
-        print("Error obteniendo ubicación: $e");
+        if (!mounted) return;
+        setState(() => _compartiendoUbicacion = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error obteniendo ubicacion: $e')),
+        );
       }
     } else {
       setState(() => _compartiendoUbicacion = false);
@@ -111,10 +168,110 @@ class _ChatScreenState extends State<ChatScreen> {
     }
   }
 
-  Future<void> _concretarVenta() async {
-    await _supabase.from('chats').update({'estado': 'concretado'}).eq('id', widget.chatId);
+  Future<void> _solicitarConfirmacionVenta() async {
+    final myUid = _supabase.auth.currentUser?.id;
+    if (myUid == null || _chatData == null) return;
+
+    final esVendedor = _chatData!['vendedor_id'] == myUid;
+    final estado = _estadoConfirmacionSolicitadaPor(esVendedor);
+
+    await _supabase.from('chats').update({'estado': estado}).eq('id', widget.chatId);
+    await _insertarMensajeSistema(
+      esVendedor
+          ? 'El vendedor solicito confirmar la venta.'
+          : 'El comprador solicito confirmar la compra.',
+    );
+
+    if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('¡Trato concretado! Ahora pueden activar el mapa del campus.')),
+      const SnackBar(content: Text('Solicitud enviada. La otra persona debe confirmar.')),
+    );
+  }
+
+  Future<void> _confirmarVenta() async {
+    await _supabase.from('chats').update({'estado': 'concretado'}).eq('id', widget.chatId);
+    await _insertarMensajeSistema('Venta confirmada. Ahora ambos pueden compartir ubicacion en el campus.');
+
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Venta confirmada. Ya pueden compartir ubicacion.')),
+    );
+  }
+
+  Future<void> _cancelarConfirmacionVenta() async {
+    await _supabase.from('chats').update({
+      'estado': 'negociacion',
+      'comprador_compartiendo': false,
+      'comprador_lat': null,
+      'comprador_lng': null,
+      'vendedor_compartiendo': false,
+      'vendedor_lat': null,
+      'vendedor_lng': null,
+    }).eq('id', widget.chatId);
+    await _insertarMensajeSistema('La confirmacion de venta fue cancelada.');
+  }
+
+  Future<void> _mostrarOpcionesConcretar(bool esVendedor, String? estado) async {
+    final puedeConfirmar = _puedoConfirmarVenta(estado, esVendedor);
+    final pendientePorMi = _confirmacionSolicitadaPorMi(estado, esVendedor);
+
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF21242D),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: Icon(
+                    puedeConfirmar ? Icons.verified_rounded : Icons.handshake_outlined,
+                    color: Colors.greenAccent,
+                  ),
+                  title: Text(
+                    puedeConfirmar ? 'Confirmar venta' : 'Solicitar confirmar venta',
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+                  ),
+                  subtitle: Text(
+                    puedeConfirmar
+                        ? 'Al confirmar, se habilita compartir ubicacion para ambos.'
+                        : pendientePorMi
+                            ? 'Ya enviaste la solicitud. Espera la confirmacion.'
+                            : 'La otra persona tendra que aceptar antes de compartir GPS.',
+                    style: const TextStyle(color: Colors.grey),
+                  ),
+                  enabled: !pendientePorMi,
+                  onTap: pendientePorMi
+                      ? null
+                      : () async {
+                          Navigator.pop(context);
+                          if (puedeConfirmar) {
+                            await _confirmarVenta();
+                          } else {
+                            await _solicitarConfirmacionVenta();
+                          }
+                        },
+                ),
+                if (_ventaPendiente(estado))
+                  ListTile(
+                    leading: const Icon(Icons.close_rounded, color: Colors.redAccent),
+                    title: const Text('Cancelar solicitud', style: TextStyle(color: Colors.white)),
+                    subtitle: const Text('Vuelve el trato a negociacion.', style: TextStyle(color: Colors.grey)),
+                    onTap: () async {
+                      Navigator.pop(context);
+                      await _cancelarConfirmacionVenta();
+                    },
+                  ),
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 
@@ -123,12 +280,12 @@ class _ChatScreenState extends State<ChatScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: const Color(0xFF21242D),
-        title: const Text('¿Eliminar chat?', style: TextStyle(color: Colors.white)),
-        content: const Text('Esta acción borrará el historial por completo.', style: TextStyle(color: Colors.grey)),
+        title: const Text('Eliminar chat?', style: TextStyle(color: Colors.white)),
+        content: const Text('Esta accion borrara el historial por completo.', style: TextStyle(color: Colors.grey)),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancelar')),
           TextButton(
-            onPressed: () => Navigator.pop(ctx, true), 
+            onPressed: () => Navigator.pop(ctx, true),
             child: const Text('Eliminar', style: TextStyle(color: Colors.redAccent)),
           ),
         ],
@@ -156,7 +313,10 @@ class _ChatScreenState extends State<ChatScreen> {
         'contenido': texto,
       });
     } catch (e) {
-      print("Error al enviar mensaje: $e");
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error al enviar mensaje: $e')),
+      );
     }
   }
 
@@ -164,7 +324,9 @@ class _ChatScreenState extends State<ChatScreen> {
   Widget build(BuildContext context) {
     final myUid = _supabase.auth.currentUser?.id;
     final esVendedor = _chatData != null && _chatData!['vendedor_id'] == myUid;
-    final estaConcretado = _chatData != null && _chatData!['estado'] == 'concretado';
+    final estadoChat = _chatData?['estado']?.toString();
+    final estaConcretado = estadoChat == 'concretado';
+    final ventaPendiente = _ventaPendiente(estadoChat);
 
     return Scaffold(
       backgroundColor: const Color(0xFF181A20),
@@ -177,16 +339,28 @@ class _ChatScreenState extends State<ChatScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(_nombreContraparte, style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold)),
+            Text(
+              _nombreContraparte,
+              style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+            ),
             Text(widget.productoTitulo, style: const TextStyle(color: Colors.grey, fontSize: 11)),
           ],
         ),
         actions: [
-          if (esVendedor && !estaConcretado)
+          if (!estaConcretado && _chatData != null)
             TextButton.icon(
-              onPressed: _concretarVenta,
-              icon: const Icon(Icons.handshake_outlined, color: Colors.greenAccent, size: 16),
-              label: const Text('Concretar', style: TextStyle(color: Colors.greenAccent, fontSize: 12)),
+              onPressed: () => _mostrarOpcionesConcretar(esVendedor, estadoChat),
+              icon: Icon(
+                _puedoConfirmarVenta(estadoChat, esVendedor)
+                    ? Icons.verified_rounded
+                    : Icons.handshake_outlined,
+                color: Colors.greenAccent,
+                size: 16,
+              ),
+              label: Text(
+                _puedoConfirmarVenta(estadoChat, esVendedor) ? 'Confirmar' : 'Concretar',
+                style: const TextStyle(color: Colors.greenAccent, fontSize: 12),
+              ),
             ),
           IconButton(
             icon: const Icon(Icons.delete_sweep_rounded, color: Colors.redAccent, size: 22),
@@ -196,6 +370,30 @@ class _ChatScreenState extends State<ChatScreen> {
       ),
       body: Column(
         children: [
+          if (ventaPendiente)
+            Container(
+              color: const Color(0xFF2D2F36),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Row(
+                children: [
+                  const Icon(Icons.pending_actions_rounded, color: Colors.amberAccent, size: 20),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      _puedoConfirmarVenta(estadoChat, esVendedor)
+                          ? 'La otra persona solicito concretar. Confirma para habilitar el GPS.'
+                          : 'Solicitud enviada. Esperando confirmacion de la otra persona.',
+                      style: const TextStyle(color: Colors.white, fontSize: 13),
+                    ),
+                  ),
+                  if (_puedoConfirmarVenta(estadoChat, esVendedor))
+                    TextButton(
+                      onPressed: _confirmarVenta,
+                      child: const Text('Confirmar'),
+                    ),
+                ],
+              ),
+            ),
           if (estaConcretado)
             Container(
               color: const Color(0xFF1E293B),
@@ -205,11 +403,14 @@ class _ChatScreenState extends State<ChatScreen> {
                   const Icon(Icons.share_location_rounded, color: Color(0xFF3F69FF), size: 20),
                   const SizedBox(width: 10),
                   const Expanded(
-                    child: Text('Compartir mi ubicación en el Campus', style: TextStyle(color: Colors.white, fontSize: 13)),
+                    child: Text(
+                      'Compartir mi ubicacion en el Campus',
+                      style: TextStyle(color: Colors.white, fontSize: 13),
+                    ),
                   ),
                   Switch(
                     value: _compartiendoUbicacion,
-                    activeColor: const Color(0xFF3F69FF),
+                    activeThumbColor: const Color(0xFF3F69FF),
                     onChanged: _conmutarUbicacion,
                   ),
                 ],
@@ -217,7 +418,6 @@ class _ChatScreenState extends State<ChatScreen> {
             ),
           Expanded(
             child: StreamBuilder<List<Map<String, dynamic>>>(
-              // 🔄 CORREGIDO: El ordenamiento nativo dentro del stream evita trabar Flutter Web
               stream: _supabase
                   .from('mensajes')
                   .stream(primaryKey: ['id'])
@@ -227,7 +427,9 @@ class _ChatScreenState extends State<ChatScreen> {
                 if (snapshot.hasError) {
                   return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.red)));
                 }
-                if (!snapshot.hasData) return const Center(child: CircularProgressIndicator(color: Color(0xFF3F69FF)));
+                if (!snapshot.hasData) {
+                  return const Center(child: CircularProgressIndicator(color: Color(0xFF3F69FF)));
+                }
                 final mensajes = snapshot.data!;
                 return ListView.builder(
                   padding: const EdgeInsets.all(16),
@@ -263,7 +465,7 @@ class _ChatScreenState extends State<ChatScreen> {
                       controller: _msgController,
                       style: const TextStyle(color: Colors.white, fontSize: 14),
                       decoration: const InputDecoration(
-                        hintText: "Escribe un mensaje...",
+                        hintText: 'Escribe un mensaje...',
                         hintStyle: TextStyle(color: Colors.grey),
                         border: InputBorder.none,
                         contentPadding: EdgeInsets.symmetric(horizontal: 12),

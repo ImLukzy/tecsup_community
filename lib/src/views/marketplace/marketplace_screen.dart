@@ -67,13 +67,7 @@ class _MarketplaceScreenState extends State<MarketplaceScreen> with SingleTicker
           children: [
             SizedBox(
               height: 24,
-              child: Image.asset(
-                'assets/logo.png', 
-                fit: BoxFit.contain,
-                errorBuilder: (context, error, stackTrace) {
-                  return const Icon(Icons.storefront_rounded, color: Color(0xFF3F69FF), size: 24);
-                },
-              ),
+              child: const Icon(Icons.storefront_rounded, color: Color(0xFF3F69FF), size: 24),
             ),
             const SizedBox(height: 2),
             const Text(

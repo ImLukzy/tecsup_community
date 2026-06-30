@@ -1,13 +1,14 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:tecsup_community/src/views/marketplace/marketplace_screen.dart';
-import 'package:tecsup_community/src/views/marketplace/explorar_tab.dart'; 
-import 'package:tecsup_community/src/views/marketplace/guardados_tab.dart';
 import 'package:tecsup_community/src/views/marketplace/chats_tab.dart'; // Nueva importación de la pestaña de chats
+import 'package:tecsup_community/src/views/mapa/mapa_screen.dart';
 
 class NavigationHome extends StatefulWidget {
   final SupabaseClient supabase;
-  const NavigationHome({Key? key, required this.supabase}) : super(key: key);
+  const NavigationHome({super.key, required this.supabase});
 
   @override
   State<NavigationHome> createState() => _NavigationHomeState();
@@ -15,6 +16,9 @@ class NavigationHome extends StatefulWidget {
 
 class _NavigationHomeState extends State<NavigationHome> {
   int _currentIndex = 0;
+  StreamSubscription<List<Map<String, dynamic>>>? _mensajesSubscription;
+  final Set<dynamic> _mensajesNotificados = {};
+  bool _notificacionesInicializadas = false;
 
   // Lista de vistas principales de tu aplicación
   late final List<Widget> _paginas;
@@ -29,14 +33,65 @@ class _NavigationHomeState extends State<NavigationHome> {
       // Pestaña 2: Chats Funcionales (Reemplaza al texto estático de Comunidad)
       ChatsTab(supabase: widget.supabase),
       
-      // Pestaña 3: Mapa Campus (Se mantiene intacto)
-      const Center(
-        child: Text(
-          'Pantalla de Mapa Campus',
-          style: TextStyle(color: Colors.white, fontSize: 16),
-        ),
-      ),
+      // Pestaña 3: Mapa Campus
+      MapaScreen(supabase: widget.supabase),
     ];
+    _escucharNotificacionesDeMensajes();
+  }
+
+  @override
+  void dispose() {
+    _mensajesSubscription?.cancel();
+    super.dispose();
+  }
+
+  void _escucharNotificacionesDeMensajes() {
+    final myUid = widget.supabase.auth.currentUser?.id;
+    if (myUid == null) return;
+
+    _mensajesSubscription = widget.supabase
+        .from('mensajes')
+        .stream(primaryKey: ['id'])
+        .order('created_at', ascending: true)
+        .listen((mensajes) {
+      if (!mounted) return;
+
+      if (!_notificacionesInicializadas) {
+        for (final mensaje in mensajes) {
+          final id = mensaje['id'];
+          if (id != null) _mensajesNotificados.add(id);
+        }
+        _notificacionesInicializadas = true;
+        return;
+      }
+
+      for (final mensaje in mensajes) {
+        final id = mensaje['id'];
+        if (id == null || _mensajesNotificados.contains(id)) continue;
+        _mensajesNotificados.add(id);
+
+        if (mensaje['remitente_id'] == myUid) continue;
+
+        final texto = (mensaje['contenido'] ?? 'Nuevo mensaje').toString();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: const Color(0xFF21242D),
+            content: Text(
+              'Nuevo mensaje: $texto',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(color: Colors.white),
+            ),
+            action: SnackBarAction(
+              label: 'Chats',
+              textColor: const Color(0xFF3F69FF),
+              onPressed: () => setState(() => _currentIndex = 1),
+            ),
+          ),
+        );
+      }
+    });
   }
 
   @override
@@ -55,7 +110,7 @@ class _NavigationHomeState extends State<NavigationHome> {
         decoration: BoxDecoration(
           border: Border(
             top: BorderSide(
-              color: Colors.white.withOpacity(0.02),
+              color: Colors.white.withValues(alpha: 0.02),
               width: 1,
             ),
           ),

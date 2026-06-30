@@ -17,6 +17,8 @@ dependencies:
   supabase_flutter: ^2.8.0
   image_picker: ^1.1.2
   geolocator: ^14.0.3
+  flutter_map: ^8.3.0
+  latlong2: ^0.9.1
 
 dev_dependencies:
   flutter_test:
@@ -26,6 +28,5 @@ dev_dependencies:
 flutter:
   uses-material-design: true
 
-  # 🟩 Carpeta de recursos corregida sin duplicados
   assets:
     - assets/

@@ -130,7 +130,7 @@ class _GuardadosTabState extends State<GuardadosTab> {
           return StreamBuilder<List<Map<String, dynamic>>>(
             // Traemos en tiempo real los productos cuyos IDs coincidan con tus favoritos
             stream: widget.supabase
-                .from('productos')
+                .from('marketplace')
                 .stream(primaryKey: ['id'])
                 .order('created_at', ascending: false),
             builder: (context, productosSnapshot) {

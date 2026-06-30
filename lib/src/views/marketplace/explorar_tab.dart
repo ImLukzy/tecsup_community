@@ -18,11 +18,13 @@ class _ExplorarTabState extends State<ExplorarTab> {
   final _busquedaController = TextEditingController();
   String _filtroBusqueda = "";
   final Set<dynamic> _favoritosLocales = {};
+  bool _cargando = false;
+  List<Map<String, dynamic>> _productos = [];
 
   @override
   void initState() {
     super.initState();
-    _cargarFavoritos();
+    _inicializarDatos();
   }
 
   @override
@@ -31,17 +33,40 @@ class _ExplorarTabState extends State<ExplorarTab> {
     super.dispose();
   }
 
+  Future<void> _inicializarDatos() async {
+    setState(() => _cargando = true);
+    await _cargarFavoritos();
+    await _cargarProductosDesdeBD();
+    setState(() => _cargando = false);
+  }
+
+  Future<void> _cargarProductosDesdeBD() async {
+    try {
+      // 🟩 UNIFICADO: Tabla 'marketplace'
+      final data = await widget.supabase
+          .from('marketplace')
+          .select()
+          .order('created_at', ascending: false);
+      
+      _productos = List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      print("Error cargando productos en catálogo: $e");
+    }
+  }
+
   Future<void> _cargarFavoritos() async {
     final miUid = widget.supabase.auth.currentUser?.id;
     if (miUid == null) return;
     try {
-      final res = await widget.supabase.from('favoritos').select('producto_id').eq('usuario_id', miUid);
-      setState(() {
-        _favoritosLocales.clear();
-        for (var item in res) {
-          _favoritosLocales.add(item['producto_id']);
-        }
-      });
+      final res = await widget.supabase
+          .from('favoritos')
+          .select('producto_id')
+          .eq('usuario_id', miUid);
+          
+      _favoritosLocales.clear();
+      for (var item in res) {
+        _favoritosLocales.add(item['producto_id']);
+      }
     } catch (e) {
       print("Error cargando favoritos: $e");
     }
@@ -63,12 +88,24 @@ class _ExplorarTabState extends State<ExplorarTab> {
     if (modalState != null) modalState(cambiarEstado);
 
     try {
-      final existente = await widget.supabase.from('favoritos').select().eq('usuario_id', miUid).eq('producto_id', productoId).maybeSingle();
-      // 🟩 Corregido aquí: cambiado 'existing' por 'existente'
+      final existente = await widget.supabase
+          .from('favoritos')
+          .select()
+          .eq('usuario_id', miUid)
+          .eq('producto_id', productoId)
+          .maybeSingle();
+          
       if (existente == null) {
-        await widget.supabase.from('favoritos').insert({'usuario_id': miUid, 'producto_id': productoId});
+        await widget.supabase.from('favoritos').insert({
+          'usuario_id': miUid, 
+          'producto_id': productoId
+        });
       } else {
-        await widget.supabase.from('favoritos').delete().eq('usuario_id', miUid).eq('producto_id', productoId);
+        await widget.supabase
+            .from('favoritos')
+            .delete()
+            .eq('usuario_id', miUid)
+            .eq('producto_id', productoId);
       }
     } catch (e) {
       print('Error interactuando con favoritos: $e');
@@ -79,13 +116,15 @@ class _ExplorarTabState extends State<ExplorarTab> {
     try {
       final productoId = id is String ? int.tryParse(id) ?? id : id;
 
+      // 🟩 UNIFICADO: Borrado de la tabla 'marketplace'
       await widget.supabase
           .from('marketplace')
           .delete()
           .eq('id', productoId);
 
+      await _cargarProductosDesdeBD();
+
       if (!mounted) return;
-      
       Navigator.pop(context);
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -94,6 +133,7 @@ class _ExplorarTabState extends State<ExplorarTab> {
           backgroundColor: Colors.green,
         ),
       );
+      setState(() {});
     } catch (e) {
       print("Error detallado al eliminar: $e");
       if (mounted) {
@@ -109,14 +149,16 @@ class _ExplorarTabState extends State<ExplorarTab> {
 
   void _mostrarDetalles(Map<String, dynamic> prod) {
     final miUid = widget.supabase.auth.currentUser?.id;
-    final vendedorId = prod['vendedor_id'] ?? prod['usuario_id'];
+    final vendedorId = prod['usuario_id'];
     final esMio = vendedorId == miUid;
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: const Color(0xFF21242D),
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20))
+      ),
       builder: (context) => StatefulBuilder(
         builder: (context, setBottomSheetState) => ProductDetailModal(
           prod: prod,
@@ -138,7 +180,7 @@ class _ExplorarTabState extends State<ExplorarTab> {
 
   Future<void> _iniciarOAbrirChat(Map<String, dynamic> prod) async {
     final miUid = widget.supabase.auth.currentUser?.id;
-    final vendedorId = prod['vendedor_id'] ?? prod['usuario_id'];
+    final vendedorId = prod['usuario_id'];
     if (miUid == null || vendedorId == null) return;
 
     try {
@@ -194,72 +236,79 @@ class _ExplorarTabState extends State<ExplorarTab> {
     final size = MediaQuery.of(context).size;
     int columnas = size.width > 1200 ? 4 : (size.width > 750 ? 3 : 2);
 
-    return Container(
-      color: const Color(0xFF181A20),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-            child: Container(
-              decoration: BoxDecoration(
-                color: const Color(0xFF21242D),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: TextField(
-                controller: _busquedaController,
-                style: const TextStyle(color: Colors.white),
-                decoration: const InputDecoration(
-                  hintText: "Buscar en Marketplace...",
-                  hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
-                  prefixIcon: Icon(Icons.search, color: Colors.grey),
-                  border: InputBorder.none,
-                  contentPadding: EdgeInsets.symmetric(vertical: 14),
+    List<Map<String, dynamic>> productosFiltrados = _productos;
+    if (_filtroBusqueda.isNotEmpty) {
+      productosFiltrados = productosFiltrados
+          .where((p) => (p['titulo'] ?? '')
+              .toString()
+              .toLowerCase()
+              .contains(_filtroBusqueda))
+          .toList();
+    }
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF181A20),
+      body: RefreshIndicator(
+        color: const Color(0xFF3F69FF),
+        onRefresh: _cargarProductosDesdeBD,
+        child: Column(
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: const Color(0xFF21242D),
+                  borderRadius: BorderRadius.circular(12),
                 ),
-                onChanged: (val) => setState(() => _filtroBusqueda = val.toLowerCase()),
+                child: TextField(
+                  controller: _busquedaController,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    hintText: "Buscar en Marketplace...",
+                    hintStyle: TextStyle(color: Colors.grey, fontSize: 14),
+                    prefixIcon: Icon(Icons.search, color: Colors.grey),
+                    border: InputBorder.none,
+                    contentPadding: EdgeInsets.symmetric(vertical: 14),
+                  ),
+                  onChanged: (val) => setState(() => _filtroBusqueda = val.toLowerCase()),
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: StreamBuilder<List<Map<String, dynamic>>>(
-              stream: widget.supabase.from('marketplace').stream(primaryKey: ['id']).order('created_at', ascending: false),
-              builder: (context, snapshot) {
-                if (snapshot.connectionState == ConnectionState.waiting) {
-                  return const Center(child: CircularProgressIndicator(color: Color(0xFF3F69FF)));
-                }
-                
-                var productos = snapshot.data ?? [];
-
-                if (_filtroBusqueda.isNotEmpty) {
-                  productos = productos.where((p) => (p['titulo'] ?? '').toString().toLowerCase().contains(_filtroBusqueda)).toList();
-                }
-
-                if (productos.isEmpty) {
-                  return const Center(
-                    child: Text('No se encontraron artículos.', style: TextStyle(color: Colors.grey)),
-                  );
-                }
-
-                return GridView.builder(
-                  padding: const EdgeInsets.all(14),
-                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                    crossAxisCount: columnas,
-                    crossAxisSpacing: 14,
-                    mainAxisSpacing: 14,
-                    childAspectRatio: 0.74,
-                  ),
-                  itemCount: productos.length,
-                  itemBuilder: (context, index) {
-                    final prod = productos[index];
-                    return ProductCard(
-                      prod: prod,
-                      onTap: () => _mostrarDetalles(prod),
-                    );
-                  },
-                );
-              },
+            Expanded(
+              child: _cargando
+                  ? const Center(child: CircularProgressIndicator(color: Color(0xFF3F69FF)))
+                  : productosFiltrados.isEmpty
+                      ? ListView(
+                          children: const [
+                            SizedBox(height: 100),
+                            Center(
+                              child: Text(
+                                'No se encontraron artículos.', 
+                                style: TextStyle(color: Colors.grey)
+                              ),
+                            ),
+                          ],
+                        )
+                      : GridView.builder(
+                          padding: const EdgeInsets.all(14),
+                          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: columnas,
+                            crossAxisSpacing: 14,
+                            mainAxisSpacing: 14,
+                            childAspectRatio: 0.74,
+                          ),
+                          itemCount: productosFiltrados.length,
+                          itemBuilder: (context, index) {
+                            final prod = productosFiltrados[index];
+                            return ProductCard(
+                              prod: prod,
+                              onTap: () => _mostrarDetalles(prod),
+                            );
+                          },
+                        ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

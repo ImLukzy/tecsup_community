@@ -30,11 +30,12 @@ class _UploadProductModalState extends State<UploadProductModal> {
     super.dispose();
   }
 
-  Future<void> _seleccionarImagen() async {
+  Future<void> _seleccionarImagen(ImageSource source) async {
     try {
       final XFile? image = await _picker.pickImage(
-        source: ImageSource.gallery,
+        source: source,
         imageQuality: 70,
+        maxWidth: 1600,
       );
       if (image != null) {
         final bytes = await image.readAsBytes();
@@ -45,6 +46,44 @@ class _UploadProductModalState extends State<UploadProductModal> {
     } catch (e) {
       print("Error al seleccionar imagen: $e");
     }
+  }
+
+  Future<void> _mostrarOpcionesImagen() async {
+    await showModalBottomSheet<void>(
+      context: context,
+      backgroundColor: const Color(0xFF21242D),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(18)),
+      ),
+      builder: (context) {
+        return SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.photo_camera_rounded, color: Color(0xFF3F69FF)),
+                  title: const Text('Tomar foto', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _seleccionarImagen(ImageSource.camera);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_library_rounded, color: Color(0xFF3F69FF)),
+                  title: const Text('Elegir de galeria', style: TextStyle(color: Colors.white)),
+                  onTap: () {
+                    Navigator.pop(context);
+                    _seleccionarImagen(ImageSource.gallery);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
   }
 
   Future<void> _guardarProducto() async {
@@ -86,14 +125,17 @@ class _UploadProductModalState extends State<UploadProductModal> {
 
       // 2. Insertar los datos estructurados en la tabla
       final nuevoProducto = {
-        'vendedor_id': user.id,
+        'usuario_id': user.id,
         'titulo': _tituloController.text.trim(),
         'descripcion': _descripcionController.text.trim(),
         'precio': double.tryParse(_precioController.text.trim()) ?? 0.0,
         'image_url': imageUrl,
+        'cantidad': 1,
+        'latitud': -16.43,
+        'longitud': -71.51,
       };
 
-      final data = await _supabase.from('productos').insert(nuevoProducto).select().single();
+      final data = await _supabase.from('marketplace').insert(nuevoProducto).select().single();
 
       if (!mounted) return;
       widget.onUpload(data); // Ejecuta el callback para actualizar la lista
@@ -137,14 +179,14 @@ class _UploadProductModalState extends State<UploadProductModal> {
               
               // Selector de Imagen
               GestureDetector(
-                onTap: _seleccionarImagen,
+                onTap: _mostrarOpcionesImagen,
                 child: Container(
                   height: 140,
                   width: double.infinity,
                   decoration: BoxDecoration(
                     color: const Color(0xFF181A20),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.grey.withOpacity(0.3)),
+                    border: Border.all(color: Colors.grey.withValues(alpha: 0.3)),
                   ),
                   child: _webImageBytes != null
                       ? ClipRRect(

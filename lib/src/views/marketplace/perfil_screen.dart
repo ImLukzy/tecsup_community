@@ -22,14 +22,14 @@ class _PerfilScreenState extends State<PerfilScreen> {
   }
 
   Future<void> _cargarMisProductos() async {
-    final user = widget.supabase.auth.currentUser;
-    if (user == null) return;
+    final miUid = widget.supabase.auth.currentUser?.id;
+    if (miUid == null) return;
 
     try {
       final data = await widget.supabase
-          .from('productos')
+          .from('marketplace')
           .select()
-          .eq('vendedor_id', user.id)
+          .eq('usuario_id', miUid)
           .order('id', ascending: false);
 
       if (mounted) {
@@ -48,7 +48,7 @@ class _PerfilScreenState extends State<PerfilScreen> {
 
   Future<void> _eliminarProducto(dynamic id) async {
     try {
-      await widget.supabase.from('productos').delete().eq('id', id);
+      await widget.supabase.from('marketplace').delete().eq('id', id);
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('📦 Publicación eliminada con éxito.')),
       );

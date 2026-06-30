@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'chat_screen.dart'; // RUTA CORREGIDA: Busca el archivo en la misma carpeta
+
+import 'chat_screen.dart';
 
 class ChatsTab extends StatelessWidget {
   final SupabaseClient supabase;
-  const ChatsTab({Key? key, required this.supabase}) : super(key: key);
 
-  // Función para traer el nombre del usuario desde la tabla perfiles
+  const ChatsTab({super.key, required this.supabase});
+
   Future<String> _obtenerNombrePerfil(String userId) async {
     try {
       final data = await supabase
@@ -14,10 +15,28 @@ class ChatsTab extends StatelessWidget {
           .select('nombre_completo')
           .eq('id', userId)
           .maybeSingle();
-      return data?['nombre_completo'] ?? "Usuario Alumno";
-    } catch (e) {
-      return "Usuario Alumno";
+      return data?['nombre_completo'] ?? 'Usuario Alumno';
+    } catch (_) {
+      return 'Usuario Alumno';
     }
+  }
+
+  String _textoEstado(Map<String, dynamic> chat) {
+    final estado = chat['estado']?.toString();
+    if (estado == 'concretado') return 'Ubicacion activa para encuentro';
+    if (estado == 'confirmacion_vendedor' || estado == 'confirmacion_comprador') {
+      return 'Venta pendiente de confirmacion';
+    }
+    return 'Trato en negociacion';
+  }
+
+  Color _colorEstado(Map<String, dynamic> chat) {
+    final estado = chat['estado']?.toString();
+    if (estado == 'concretado') return Colors.greenAccent;
+    if (estado == 'confirmacion_vendedor' || estado == 'confirmacion_comprador') {
+      return Colors.amberAccent;
+    }
+    return Colors.grey;
   }
 
   @override
@@ -25,7 +44,7 @@ class ChatsTab extends StatelessWidget {
     final myUid = supabase.auth.currentUser?.id;
     if (myUid == null) {
       return const Center(
-        child: Text("Inicia sesión para ver tus chats", style: TextStyle(color: Colors.grey)),
+        child: Text('Inicia sesion para ver tus chats', style: TextStyle(color: Colors.grey)),
       );
     }
 
@@ -43,25 +62,24 @@ class ChatsTab extends StatelessWidget {
 
           if (!snapshot.hasData || snapshot.data!.isEmpty) {
             return const Center(
-              child: Text("No tienes chats activos.", style: TextStyle(color: Colors.grey)),
+              child: Text('No tienes chats activos.', style: TextStyle(color: Colors.grey)),
             );
           }
 
-          // Filtramos en caliente que pertenezcas a la conversación (como comprador o vendedor)
           final misChats = snapshot.data!.where((chat) {
             return chat['comprador_id'] == myUid || chat['vendedor_id'] == myUid;
           }).toList();
 
           if (misChats.isEmpty) {
             return const Center(
-              child: Text("No tienes chats activos.", style: TextStyle(color: Colors.grey)),
+              child: Text('No tienes chats activos.', style: TextStyle(color: Colors.grey)),
             );
           }
 
           return ListView.separated(
             padding: const EdgeInsets.all(16),
             itemCount: misChats.length,
-            separatorBuilder: (_, __) => const SizedBox(height: 12),
+            separatorBuilder: (context, index) => const SizedBox(height: 12),
             itemBuilder: (context, index) {
               final chat = misChats[index];
               final esVendedor = chat['vendedor_id'] == myUid;
@@ -75,12 +93,12 @@ class ChatsTab extends StatelessWidget {
                 child: FutureBuilder<String>(
                   future: _obtenerNombrePerfil(contraparteId),
                   builder: (context, nameSnapshot) {
-                    final nombreMostrado = nameSnapshot.data ?? "Cargando...";
+                    final nombreMostrado = nameSnapshot.data ?? 'Cargando...';
 
                     return ListTile(
                       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       leading: CircleAvatar(
-                        backgroundColor: const Color(0xFF3F69FF).withOpacity(0.15),
+                        backgroundColor: const Color(0xFF3F69FF).withValues(alpha: 0.15),
                         child: Icon(
                           esVendedor ? Icons.sell_rounded : Icons.shopping_bag_rounded,
                           color: const Color(0xFF3F69FF),
@@ -91,13 +109,8 @@ class ChatsTab extends StatelessWidget {
                         style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                       ),
                       subtitle: Text(
-                        chat['estado'] == 'concretado' 
-                            ? '📍 Ubicación activa para encuentro' 
-                            : 'Trato en negociación',
-                        style: TextStyle(
-                          color: chat['estado'] == 'concretado' ? Colors.greenAccent : Colors.grey, 
-                          fontSize: 13,
-                        ),
+                        _textoEstado(chat),
+                        style: TextStyle(color: _colorEstado(chat), fontSize: 13),
                       ),
                       trailing: const Icon(Icons.arrow_forward_ios_rounded, color: Colors.grey, size: 14),
                       onTap: () {
@@ -106,7 +119,7 @@ class ChatsTab extends StatelessWidget {
                           MaterialPageRoute(
                             builder: (context) => ChatScreen(
                               chatId: chat['id'],
-                              productoTitulo: "Negociación",
+                              productoTitulo: 'Negociacion',
                             ),
                           ),
                         );
