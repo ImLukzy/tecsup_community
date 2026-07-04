@@ -1,17 +1,37 @@
-# tecsup_community
+# Tecsup Community - Marketplace Estudiantil 🛒📱
 
-A new Flutter project.
+## 📝 Descripción del Proyecto
+Tecsup Community es una plataforma multiplataforma de Marketplace diseñada exclusivamente para la comunidad estudiantil de Tecsup. La aplicación resuelve la desorganización y los riesgos de comercio en grupos informales de mensajería, permitiendo a los estudiantes comprar, vender e intercambiar proyectos académicos, herramientas y componentes electrónicos de forma rápida y segura dentro del campus. La plataforma integra un sistema de moderación institucional activa para administradores, chat interactivo en tiempo real y persistencia relacional avanzada para potenciar la economía estudiantil.
 
-## Getting Started
+---
 
-This project is a starting point for a Flutter application.
+## 🛠️ Stack Tecnológico
+* **Frontend:** Flutter (Dart) - Arquitectura limpia, modular y reactiva.
+* **Backend & Base de Datos:** Supabase (PostgreSQL) con políticas de seguridad integradas.
+* **Autenticación:** Supabase Auth (Integración nativa con hashing Bcrypt).
+* **Almacenamiento:** Supabase Storage (Buckets remotos para imágenes de productos).
+* **Servicios del Sistema:** `flutter_local_notifications` para alertas nativas del dispositivo en eventos clave.
 
-A few resources to get you started if this is your first Flutter project:
+---
 
-- [Learn Flutter](https://docs.flutter.dev/get-started/learn-flutter)
-- [Write your first Flutter app](https://docs.flutter.dev/get-started/codelab)
-- [Flutter learning resources](https://docs.flutter.dev/reference/learning-resources)
 
-For help getting started with Flutter development, view the
-[online documentation](https://docs.flutter.dev/), which offers tutorials,
-samples, guidance on mobile development, and a full API reference.
+---
+
+## 👤 Autor
+* **Lukas Melgar** - Desarrollo Frontend, Arquitectura de Datos y Despliegue.
+
+---
+
+## ⚙️ Instrucciones de Configuración y Despliegue
+
+### Requisitos Previos
+* Flutter SDK (Versión 3.x o superior instalada).
+* Proyecto activo en la plataforma Supabase.
+* Dispositivo físico Android o emulador con la Depuración USB activa.
+
+### Pasos para Ejecutar Localmente
+
+1. **Clonar el repositorio:**
+   ```bash
+   git clone https://github.com/ImLukzy/tecsup_community
+   cd tecsup_copia
