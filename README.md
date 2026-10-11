@@ -1,11 +1,11 @@
-# Tecsup Community - Marketplace Estudiantil 🛒📱
+# Tecsup Community - Marketplace Estudiantil 
 
-## 📝 Descripción del Proyecto
+## Descripción del Proyecto
 Tecsup Community es una plataforma multiplataforma de Marketplace diseñada exclusivamente para la comunidad estudiantil de Tecsup. La aplicación resuelve la desorganización y los riesgos de comercio en grupos informales de mensajería, permitiendo a los estudiantes comprar, vender e intercambiar proyectos académicos, herramientas y componentes electrónicos de forma rápida y segura dentro del campus. La plataforma integra un sistema de moderación institucional activa para administradores, chat interactivo en tiempo real y persistencia relacional avanzada para potenciar la economía estudiantil.
 
 ---
 
-## 🛠️ Stack Tecnológico
+## Stack Tecnológico
 * **Frontend:** Flutter (Dart) - Arquitectura limpia, modular y reactiva.
 * **Backend & Base de Datos:** Supabase (PostgreSQL) con políticas de seguridad integradas.
 * **Autenticación:** Supabase Auth (Integración nativa con hashing Bcrypt).
@@ -17,12 +17,12 @@ Tecsup Community es una plataforma multiplataforma de Marketplace diseñada excl
 
 ---
 
-## 👤 Autor
+## Autor
 * **Lukas Melgar** - Desarrollo Frontend, Arquitectura de Datos y Despliegue.
 
 ---
 
-## ⚙️ Instrucciones de Configuración y Despliegue
+## Instrucciones de Configuración y Despliegue
 
 ### Requisitos Previos
 * Flutter SDK (Versión 3.x o superior instalada).
